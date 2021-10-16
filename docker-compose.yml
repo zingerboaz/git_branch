@@ -1,0 +1,78 @@
+version: '3'
+
+services:
+    jenkins_slave_1:
+        image: jenkinsci/ssh-slave
+        container_name: jenkins_slave_1 
+        ports:
+            - 5003:5000
+        # restart: always
+        volumes:
+            - ./volume_slave:/var/lib/jenkins
+        # environment:
+        #     JENKINS_SLAVE_SSH_PUBKEY: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCxnkXVQpl3yoca39SMoTzDtF+y37z2GGkE6CUHMNB7zuui/qWn2RYE7C6TyuouS6NCbEC/D4Bfke8BYh/B6HitbBYzFc9i1PjXYVPjlFZvDGuLJlOUe2Nh5sFXa5/uunCwEdf7lPANuDuKgq9UOVzhBlXltUNdsjDAPjNdhogq5+UihRhoD4jmNk6F2FMKTM3T2NBWA35H2JsNuuWbR1HNB/e9ZJTQ8/DzLlX3sxda+fEo4xJx1jWiqLEkauGRT0FP0msL6wbNl6ijgHU2Wkf5lgnm7RQ/x4VaeabfE8NgvbKBSJT+41C09HuQxul1ovPiqQ4c21nC7/wGkAGwBv+ZMAQCIYyrB09fOXzj5kbUj9vLNnhngsFwqcDGbMYgQKbXAII/N0QfbVEZ/csIqG1ynpmFaI2NL9X4hJZjphvAHq0JCZ3N+2bbLQ99DVNoyFXWe9h7Q1ZJy/v1Yamz64+49OtmMFWV9i4nYwxfTAMBzlW9PPuhqbmcpJ8i84oTM/E= boazzinger@boazzinger-HP-ProDesk-600-G2-SFF
+
+            
+    jenkins_mastar:
+        image: jenkins/jenkins:lts
+        # privileged: true
+        user: root
+        ports:
+        - 8081:8080
+        - 50000:50000
+        restart: always
+        container_name: jenkins_mastar
+        volumes:
+        - jenkins_data:/var/jenkins_home
+        # - /var/run/docker.sock:/var/run/docker.sock
+    
+ 
+volumes:
+    jenkins_data:
+   
+
+
+
+
+# Docker-in-Docker Jenkins Slave
+#
+# See: https://github.com/tehranian/dind-jenkins-slave
+# See: https://dantehranian.wordpress.com/2014/10/25/building-docker-images-within-docker-containers-via-jenkins/
+#
+# Following the best practices outlined in:
+#   http://jonathan.bergknoff.com/journal/building-good-docker-images
+
+FROM evarga/jenkins-slave
+
+ENV DEBIAN_FRONTEND noninteractive
+
+# Adapted from: https://registry.hub.docker.com/u/jpetazzo/dind/dockerfile/
+# Let's start with some basic stuff.
+RUN apt-get update -qq && apt-get install -qqy \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    software-properties-common && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+RUN add-apt-repository \
+    "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+    $(lsb_release -cs) \
+    stable"
+# Install Docker from Docker Inc. repositories.
+RUN apt-get update -qq && apt-get install -qqy docker-ce=17.09.0~ce-0~ubuntu && rm -rf /var/lib/apt/lists/*
+
+ADD wrapdocker /usr/local/bin/wrapdocker
+RUN chmod +x /usr/local/bin/wrapdocker
+VOLUME /var/lib/docker
+
+
+# Make sure that the "jenkins" user from evarga's image is part of the "docker"
+# group. Needed to access the docker daemon's unix socket.
+RUN usermod -a -G docker jenkins
+
+
+# place the jenkins slave startup script into the container
+ADD jenkins-slave-startup.sh /
+CMD ["/jenkins-slave-startup.sh"]
